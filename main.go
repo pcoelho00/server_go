@@ -15,8 +15,8 @@ func main() {
 
 	handler := http.StripPrefix("/app", http.FileServer(http.Dir(root)))
 	mux.Handle("/app/*", apiCfg.middlewareMetricsInc(handler))
-	mux.Handle("/healthz", healthzReponse{})
-	mux.Handle("/metrics", &apiCfg)
+	mux.Handle("GET /healthz", healthzReponse{})
+	mux.Handle("GET /metrics", &apiCfg)
 	mux.Handle("/reset", &apiCfg)
 
 	server := &http.Server{
