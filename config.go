@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
-	"path"
+	"strings"
 )
 
 type apiConfig struct {
@@ -20,17 +21,34 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if path.Base(r.URL.Path) == "metrics" {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		msg := fmt.Sprintf("Hits: %v", cfg.fileserverHits)
-		w.Write([]byte(msg))
-	} else if path.Base(r.URL.Path) == "reset" {
-		cfg.fileserverHits = 0
-		msg := fmt.Sprintf("Hits reset to %v", cfg.fileserverHits)
-		log.Println(msg)
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(msg))
+	if strings.Contains(r.URL.Path, "/admin/metrics") {
+		cfg.Metrics(w, r)
+	} else if strings.Contains(r.URL.Path, "/api/reset") {
+		cfg.ResetStats(w, r)
 	}
 
+}
+
+type MetricsData struct {
+	Visits int
+}
+
+func (cfg *apiConfig) Metrics(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("templates/metrics/index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := MetricsData{
+		Visits: cfg.fileserverHits,
+	}
+	tmpl.Execute(w, data)
+}
+
+func (cfg *apiConfig) ResetStats(w http.ResponseWriter, r *http.Request) {
+	cfg.fileserverHits = 0
+	msg := fmt.Sprintf("Hits reset to %v", cfg.fileserverHits)
+	log.Println(msg)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(msg))
 }

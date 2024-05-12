@@ -9,15 +9,16 @@ import (
 func main() {
 	const port = "8080"
 	const root = "."
+	const templates = root + "/templates"
 
 	mux := http.NewServeMux()
 	apiCfg := apiConfig{}
 
-	handler := http.StripPrefix("/app", http.FileServer(http.Dir(root)))
+	handler := http.StripPrefix("/app", http.FileServer(http.Dir(templates)))
 	mux.Handle("/app/*", apiCfg.middlewareMetricsInc(handler))
-	mux.Handle("GET /healthz", healthzReponse{})
-	mux.Handle("GET /metrics", &apiCfg)
-	mux.Handle("/reset", &apiCfg)
+	mux.Handle("GET /api/healthz", healthzReponse{})
+	mux.Handle("GET /admin/metrics", &apiCfg)
+	mux.Handle("/api/reset", &apiCfg)
 
 	server := &http.Server{
 		Addr:    ":" + port,
