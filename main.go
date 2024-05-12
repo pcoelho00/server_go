@@ -17,8 +17,9 @@ func main() {
 	handler := http.StripPrefix("/app", http.FileServer(http.Dir(templates)))
 	mux.Handle("/app/*", apiCfg.middlewareMetricsInc(handler))
 	mux.Handle("GET /api/healthz", healthzReponse{})
+	mux.Handle("GET /api/reset", &apiCfg)
 	mux.Handle("GET /admin/metrics", &apiCfg)
-	mux.Handle("/api/reset", &apiCfg)
+	mux.Handle("POST /api/validate_chirp", &apiCfg)
 
 	server := &http.Server{
 		Addr:    ":" + port,
