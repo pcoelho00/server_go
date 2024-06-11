@@ -6,22 +6,19 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/pcoelho00/server_go/database"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
-
-type ChirpsMsg struct {
-	Body string
-}
 
 type ValidMsg struct {
 	Valid string `json:"cleaned_body"`
 }
 
-func (cfg *apiConfig) JsonHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) PostJsonHandler(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
-	msg := ChirpsMsg{}
+	msg := database.ChirpsMsg{}
 
 	err := decoder.Decode(&msg)
 
@@ -33,11 +30,31 @@ func (cfg *apiConfig) JsonHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(msg.Body) <= 140 {
 		new_msg := profaneWords(msg.Body)
-		respondWithJson(w, http.StatusOK, ValidMsg{new_msg})
+		chirp_msg, err := cfg.db.CreateChirp(new_msg)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Couldn't write to database")
+		}
+		respondWithJson(w, http.StatusCreated, chirp_msg)
+		dbStructure, err := cfg.db.UpdateDB(chirp_msg)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Couldn't write to database")
+		}
+		cfg.db.WriteDB(dbStructure)
+
 	} else {
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long")
 	}
 
+}
+
+func (cfg *apiConfig) GetJsonHandler(w http.ResponseWriter, r *http.Request) {
+
+	ChirpsMsgs, err := cfg.db.GetChirps()
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't return msg from the database")
+	}
+
+	respondWithJson(w, http.StatusOK, ChirpsMsgs)
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {

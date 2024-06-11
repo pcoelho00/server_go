@@ -11,7 +11,7 @@ type MetricsData struct {
 	Visits int
 }
 
-func (cfg *apiConfig) Metrics(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/metrics/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -23,7 +23,7 @@ func (cfg *apiConfig) Metrics(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, data)
 }
 
-func (cfg *apiConfig) ResetStats(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) ResetStatsHandler(w http.ResponseWriter, r *http.Request) {
 	cfg.fileserverHits = 0
 	msg := fmt.Sprintf("Hits reset to %v", cfg.fileserverHits)
 	log.Println(msg)
