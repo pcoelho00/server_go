@@ -17,8 +17,14 @@ type DB struct {
 	mux  *sync.RWMutex
 }
 
+type User struct {
+	Id    int    `json:"id"`
+	Email string `json:"email"`
+}
+
 type DBStructure struct {
 	Chirps map[int]ChirpsMsg `json:"chirps"`
+	Users  map[int]User      `json:"users"`
 }
 
 func (db *DB) ensureDB() error {
@@ -47,6 +53,10 @@ func (db *DB) LoadDB() (DBStructure, error) {
 		dbStructure.Chirps = make(map[int]ChirpsMsg)
 	}
 
+	if dbStructure.Users == nil {
+		dbStructure.Users = make(map[int]User)
+	}
+
 	return dbStructure, nil
 
 }
@@ -65,17 +75,30 @@ func (db *DB) WriteDB(dbStructure DBStructure) error {
 
 }
 
-func (db *DB) UpdateDB(msg ChirpsMsg) (DBStructure, error) {
+func (db *DB) WriteChirpsToDB(msg ChirpsMsg) (DBStructure, error) {
 	db.mux.Lock()
 	defer db.mux.Unlock()
 
 	dbStructure, err := db.LoadDB()
-	fmt.Printf("%v", dbStructure)
 	if err != nil {
 		return DBStructure{}, err
 	}
 
 	dbStructure.Chirps[msg.Id] = msg
+	return dbStructure, nil
+
+}
+
+func (db *DB) WriteUserToDB(user User) (DBStructure, error) {
+	db.mux.Lock()
+	defer db.mux.Unlock()
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return DBStructure{}, err
+	}
+
+	dbStructure.Users[user.Id] = user
 	return dbStructure, nil
 
 }
@@ -113,6 +136,22 @@ func (db *DB) GetChirps() ([]ChirpsMsg, error) {
 	return msgs, nil
 }
 
+func (db *DB) GetUsers() ([]User, error) {
+	dbStructure, err := db.LoadDB()
+
+	if err != nil {
+		return []User{}, err
+	}
+
+	users := make([]User, 0)
+	for _, user := range dbStructure.Users {
+		users = append(users, user)
+	}
+
+	return users, nil
+
+}
+
 func NewDB(path string) (*DB, error) {
 
 	// Create a new DB instance
@@ -133,4 +172,34 @@ func NewDB(path string) (*DB, error) {
 	// Perform any additional initialization logic here
 
 	return db, nil
+}
+
+func (db *DB) GetChirp(id int) (ChirpsMsg, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return ChirpsMsg{}, err
+	}
+
+	msg, ok := dbStructure.Chirps[id]
+	if !ok {
+		return ChirpsMsg{}, fmt.Errorf("chirp with id %d not found", id)
+	}
+
+	return msg, nil
+}
+
+func (db *DB) GetUser(id int) (User, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return User{}, err
+	}
+
+	user, ok := dbStructure.Users[id]
+	if !ok {
+		return User{}, fmt.Errorf("User with id %d not found", id)
+	}
+
+	return user, nil
 }
