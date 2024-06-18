@@ -33,7 +33,7 @@ func profaneWords(msg string) string {
 	return msg
 }
 
-func (cfg *ApiConfig) PostJsonHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *ApiConfig) PostChirpsHandler(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	msg := database.ChirpsMsg{}

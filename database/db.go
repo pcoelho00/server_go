@@ -89,6 +89,22 @@ func (db *DB) WriteChirpsToDB(msg ChirpsMsg) (DBStructure, error) {
 
 }
 
+func (db *DB) CreateUser(body string) (User, error) {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		println("error loading")
+		return User{}, err
+	}
+
+	last_id := len(dbStructure.Users)
+	NewUser := User{
+		Id:    last_id + 1,
+		Email: body,
+	}
+
+	return NewUser, nil
+}
+
 func (db *DB) WriteUserToDB(user User) (DBStructure, error) {
 	db.mux.Lock()
 	defer db.mux.Unlock()
