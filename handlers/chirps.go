@@ -5,9 +5,12 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/pcoelho00/server_go/database"
 	"github.com/pcoelho00/server_go/jsondecoders"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type ApiConfig struct {
@@ -17,6 +20,17 @@ type ApiConfig struct {
 
 type ValidMsg struct {
 	Valid string `json:"cleaned_body"`
+}
+
+func profaneWords(msg string) string {
+	title := cases.Title(language.English)
+	upper := cases.Upper(language.English)
+
+	for _, word := range [3]string{"kerfuffle", "sharbert", "fornax"} {
+		r := strings.NewReplacer(word, "****", title.String(word), "****", upper.String(word), "****")
+		msg = r.Replace(msg)
+	}
+	return msg
 }
 
 func (cfg *ApiConfig) PostJsonHandler(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +47,7 @@ func (cfg *ApiConfig) PostJsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(msg.Body) <= 140 {
-		new_msg := jsondecoders.ProfaneWords(msg.Body)
+		new_msg := profaneWords(msg.Body)
 		chirp_msg, err := cfg.DB.CreateChirp(new_msg)
 		if err != nil {
 			jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't write to database")
