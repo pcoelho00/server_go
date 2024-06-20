@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type ChirpsMsg struct {
@@ -18,13 +20,20 @@ type DB struct {
 }
 
 type User struct {
+	Id       int    `json:"id"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type PublicUser struct {
 	Id    int    `json:"id"`
 	Email string `json:"email"`
 }
 
 type DBStructure struct {
-	Chirps map[int]ChirpsMsg `json:"chirps"`
-	Users  map[int]User      `json:"users"`
+	Chirps    map[int]ChirpsMsg `json:"chirps"`
+	Users     map[int]User      `json:"users"`
+	EmailToId map[string]int    `json:"emails"`
 }
 
 func (db *DB) ensureDB() error {
@@ -34,6 +43,18 @@ func (db *DB) ensureDB() error {
 	}
 
 	return nil
+}
+
+const PassCost = 10
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), PassCost)
+	return string(bytes), err
+}
+
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
 }
 
 func (db *DB) LoadDB() (DBStructure, error) {
@@ -55,6 +76,10 @@ func (db *DB) LoadDB() (DBStructure, error) {
 
 	if dbStructure.Users == nil {
 		dbStructure.Users = make(map[int]User)
+	}
+
+	if dbStructure.EmailToId == nil {
+		dbStructure.EmailToId = make(map[string]int)
 	}
 
 	return dbStructure, nil
@@ -89,34 +114,42 @@ func (db *DB) WriteChirpsToDB(msg ChirpsMsg) (DBStructure, error) {
 
 }
 
-func (db *DB) CreateUser(body string) (User, error) {
+func (db *DB) CreateUser(email, password string) (User, error) {
 	dbStructure, err := db.LoadDB()
 	if err != nil {
 		println("error loading")
 		return User{}, err
 	}
 
+	Id, ok := dbStructure.EmailToId[email]
+	if ok {
+		return dbStructure.Users[Id], nil
+	}
+
 	last_id := len(dbStructure.Users)
+
+	passhash, err := HashPassword(password)
+	if err != nil {
+		println("error creating password hash")
+		return User{}, err
+	}
+
 	NewUser := User{
-		Id:    last_id + 1,
-		Email: body,
+		Id:       last_id + 1,
+		Email:    email,
+		Password: passhash,
+	}
+
+	dbStructure.Users[NewUser.Id] = NewUser
+	dbStructure.EmailToId[NewUser.Email] = NewUser.Id
+
+	err = db.WriteDB(dbStructure)
+	if err != nil {
+		println("couldn't save the database")
+		return User{}, err
 	}
 
 	return NewUser, nil
-}
-
-func (db *DB) WriteUserToDB(user User) (DBStructure, error) {
-	db.mux.Lock()
-	defer db.mux.Unlock()
-
-	dbStructure, err := db.LoadDB()
-	if err != nil {
-		return DBStructure{}, err
-	}
-
-	dbStructure.Users[user.Id] = user
-	return dbStructure, nil
-
 }
 
 func (db *DB) CreateChirp(body string) (ChirpsMsg, error) {
@@ -152,16 +185,20 @@ func (db *DB) GetChirps() ([]ChirpsMsg, error) {
 	return msgs, nil
 }
 
-func (db *DB) GetUsers() ([]User, error) {
+func (db *DB) GetUsers() ([]PublicUser, error) {
 	dbStructure, err := db.LoadDB()
 
 	if err != nil {
-		return []User{}, err
+		return []PublicUser{}, err
 	}
 
-	users := make([]User, 0)
+	users := make([]PublicUser, 0)
 	for _, user := range dbStructure.Users {
-		users = append(users, user)
+		p_user := PublicUser{
+			Id:    user.Id,
+			Email: user.Email,
+		}
+		users = append(users, p_user)
 	}
 
 	return users, nil
@@ -218,4 +255,76 @@ func (db *DB) GetUser(id int) (User, error) {
 	}
 
 	return user, nil
+}
+
+func (db *DB) GetPublicUser(id int) (PublicUser, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return PublicUser{}, err
+	}
+
+	user, ok := dbStructure.Users[id]
+	if !ok {
+		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
+	}
+
+	return PublicUser{
+		Id:    user.Id,
+		Email: user.Email,
+	}, nil
+}
+
+func (db *DB) GetUserFromLogin(email, password string) (PublicUser, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return PublicUser{}, err
+	}
+
+	id, ok := dbStructure.EmailToId[email]
+	if !ok {
+		return PublicUser{}, fmt.Errorf("User %s doesn't exist", email)
+	}
+
+	user, ok := dbStructure.Users[id]
+	if !ok {
+		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
+	}
+
+	pass_check := CheckPasswordHash(password, user.Password)
+
+	if pass_check {
+		return PublicUser{
+			Id:    user.Id,
+			Email: user.Email,
+		}, nil
+	} else {
+		return PublicUser{}, fmt.Errorf("password doesn't match")
+	}
+
+}
+
+func (db *DB) GetPublicUserFromEmail(email string) (PublicUser, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return PublicUser{}, err
+	}
+
+	id, ok := dbStructure.EmailToId[email]
+	if !ok {
+		return PublicUser{}, fmt.Errorf("User %s doesn't exist", email)
+	}
+
+	user, ok := dbStructure.Users[id]
+	if !ok {
+		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
+	}
+
+	return PublicUser{
+		Id:    user.Id,
+		Email: user.Email,
+	}, nil
+
 }

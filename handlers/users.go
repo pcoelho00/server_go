@@ -9,13 +9,19 @@ import (
 	"github.com/pcoelho00/server_go/jsondecoders"
 )
 
-type JsonUser struct {
+type PostUser struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type ResponseUser struct {
+	Id    int    `json:"id"`
 	Email string `json:"email"`
 }
 
 func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	user := JsonUser{}
+	user := PostUser{}
 	err := decoder.Decode(&user)
 
 	if err != nil {
@@ -24,22 +30,15 @@ func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	new_user, err := cfg.DB.CreateUser(user.Email)
+	NewUser, err := cfg.DB.CreateUser(user.Email, user.Password)
 	if err != nil {
-		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't create a new User")
+		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't Create the User")
 	}
 
-	dbStructure, err := cfg.DB.WriteUserToDB(new_user)
-	if err != nil {
-		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't write to database")
-	}
-
-	err = cfg.DB.WriteDB(dbStructure)
-	if err != nil {
-		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't write the database")
-	}
-
-	jsondecoders.RespondWithJson(w, http.StatusCreated, new_user)
+	jsondecoders.RespondWithJson(w, http.StatusCreated, ResponseUser{
+		Id:    NewUser.Id,
+		Email: NewUser.Email,
+	})
 
 }
 
@@ -59,7 +58,7 @@ func (cfg *ApiConfig) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Error getting ID")
 	}
-	User, err := cfg.DB.GetUser(UserId)
+	User, err := cfg.DB.GetPublicUser(UserId)
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusNotFound, "Chirp ID doesn't exists")
 	} else {
