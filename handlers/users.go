@@ -10,13 +10,15 @@ import (
 )
 
 type PostUser struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	ExpireSecs int    `json:"expires_in_seconds"`
 }
 
 type ResponseUser struct {
 	Id    int    `json:"id"`
 	Email string `json:"email"`
+	Token string `json:"token"`
 }
 
 func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -35,9 +37,15 @@ func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
 		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't Create the User")
 	}
 
+	new_token, err := createToken(cfg.JwtSecret, user.ExpireSecs, NewUser.Id)
+	if err != nil {
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Couldn't create the token")
+	}
+
 	jsondecoders.RespondWithJson(w, http.StatusCreated, ResponseUser{
 		Id:    NewUser.Id,
 		Email: NewUser.Email,
+		Token: new_token,
 	})
 
 }

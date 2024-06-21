@@ -16,6 +16,7 @@ import (
 type ApiConfig struct {
 	FileserverHits int
 	DB             *database.DB
+	JwtSecret      string
 }
 
 type ValidMsg struct {

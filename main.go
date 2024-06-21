@@ -6,16 +6,32 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/pcoelho00/server_go/database"
 	"github.com/pcoelho00/server_go/handlers"
 )
 
+func LoadJWT() (string, error) {
+	err := godotenv.Load()
+	if err != nil {
+		return "", err
+	}
+	jwtSecret := os.Getenv("JWT_SECRET")
+	return jwtSecret, nil
+}
+
 func main() {
+
 	const port = "8080"
 	const root = "."
 	const templates = root + "/templates"
 
-	_, err := os.Stat("database.json")
+	jwtSecret, err := LoadJWT()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	_, err = os.Stat("database.json")
 	if !os.IsNotExist(err) {
 		err := os.Remove("database.json")
 		if err != nil {
@@ -28,12 +44,13 @@ func main() {
 		log.Fatal("Can't connect with the Database")
 	}
 
-	mux := http.NewServeMux()
 	apiCfg := handlers.ApiConfig{
 		FileserverHits: 0,
 		DB:             db,
+		JwtSecret:      jwtSecret,
 	}
 
+	mux := http.NewServeMux()
 	handler := http.StripPrefix("/app", http.FileServer(http.Dir(templates)))
 	mux.Handle("/app/*", apiCfg.MiddlewareMetricsInc(handler))
 	mux.HandleFunc("GET /api/healthz", handlers.HealthsResponseHandler)
