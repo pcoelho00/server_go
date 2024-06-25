@@ -1,4 +1,4 @@
-package handlers
+package auth
 
 import (
 	"strconv"
@@ -7,7 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func createToken(secretKey string, expire_seconds int, id int) (string, error) {
+func CreateToken(secretKey string, expire_seconds int, id int) (string, error) {
 
 	token := jwt.NewWithClaims(
 		jwt.SigningMethodHS256,
@@ -19,7 +19,7 @@ func createToken(secretKey string, expire_seconds int, id int) (string, error) {
 		},
 	)
 
-	tokenString, err := token.SignedString(secretKey)
+	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
 		return "", err
 	}

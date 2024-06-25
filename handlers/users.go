@@ -15,10 +15,32 @@ type PostUser struct {
 	ExpireSecs int    `json:"expires_in_seconds"`
 }
 
+func (pu *PostUser) UnmarshalJSON(data []byte) error {
+	type NewPostUser PostUser
+
+	aux := &struct {
+		ExpireSecs *int `json:"expires_in_seconds"`
+		*NewPostUser
+	}{
+		NewPostUser: (*NewPostUser)(pu),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if aux.ExpireSecs == nil {
+		pu.ExpireSecs = 24 * 60 * 60
+	} else {
+		pu.ExpireSecs = *aux.ExpireSecs
+	}
+
+	return nil
+}
+
 type ResponseUser struct {
 	Id    int    `json:"id"`
 	Email string `json:"email"`
-	Token string `json:"token"`
 }
 
 func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,15 +59,9 @@ func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
 		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't Create the User")
 	}
 
-	new_token, err := createToken(cfg.JwtSecret, user.ExpireSecs, NewUser.Id)
-	if err != nil {
-		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Couldn't create the token")
-	}
-
 	jsondecoders.RespondWithJson(w, http.StatusCreated, ResponseUser{
 		Id:    NewUser.Id,
 		Email: NewUser.Email,
-		Token: new_token,
 	})
 
 }

@@ -2,26 +2,71 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
+	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/pcoelho00/server_go/auth"
 	"github.com/pcoelho00/server_go/jsondecoders"
 )
+
+type LoginUser struct {
+	Id       int    `json:"id"`
+	Email    string `json:"email"`
+	JwtToken string `json:"token"`
+}
 
 func (cfg *ApiConfig) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
-	user := PostUser{}
-	err := decoder.Decode(&user)
+	var postUser PostUser
+
+	err := decoder.Decode(&postUser)
 
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Bad Arguments")
 	}
 
-	User, err := cfg.DB.GetUserFromLogin(user.Email, user.Password)
+	User, err := cfg.DB.GetUserFromLogin(postUser.Email, postUser.Password)
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusUnauthorized, "User not Found/Wrong Password")
 	} else {
-		jsondecoders.RespondWithJson(w, http.StatusOK, User)
+		token, err := auth.CreateToken(cfg.JwtSecret, postUser.ExpireSecs, User.Id)
+		if err != nil {
+			jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error creating token")
+		}
+
+		jsondecoders.RespondWithJson(w, http.StatusOK, LoginUser{
+			Id:       User.Id,
+			Email:    User.Email,
+			JwtToken: token,
+		})
 	}
 
+}
+
+func (cfg *ApiConfig) PutLoginUserHandler(w http.ResponseWriter, r *http.Request) {
+
+	token_string := r.Header.Get("Authorization")
+	token_string = strings.Replace(token_string, "Bearer ", "", 1)
+
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token_string, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(cfg.JwtSecret), nil
+	})
+
+	if err != nil {
+		log.Println(token_string)
+		log.Println(err.Error())
+		jsondecoders.RespondWithError(w, http.StatusUnauthorized, "Couldn't authenticate user")
+	}
+
+	subject, err := claims.GetSubject()
+	if err != nil {
+		log.Println(err.Error())
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Couldn't authenticate user")
+	}
+	fmt.Printf("Subject: %s", subject)
 }
