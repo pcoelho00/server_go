@@ -305,16 +305,11 @@ func (db *DB) GetUserFromLogin(email, password string) (PublicUser, error) {
 
 }
 
-func (db *DB) GetPublicUserFromEmail(email string) (PublicUser, error) {
+func (db *DB) UpdateUser(id int, email, password string) (PublicUser, error) {
 
 	dbStructure, err := db.LoadDB()
 	if err != nil {
 		return PublicUser{}, err
-	}
-
-	id, ok := dbStructure.EmailToId[email]
-	if !ok {
-		return PublicUser{}, fmt.Errorf("User %s doesn't exist", email)
 	}
 
 	user, ok := dbStructure.Users[id]
@@ -322,9 +317,31 @@ func (db *DB) GetPublicUserFromEmail(email string) (PublicUser, error) {
 		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
 	}
 
+	passhash, err := HashPassword(password)
+	if err != nil {
+		println("error creating password hash")
+		return PublicUser{}, err
+	}
+
+	UpdatedUser := User{
+		Id:       user.Id,
+		Email:    email,
+		Password: passhash,
+	}
+
+	dbStructure.Users[id] = UpdatedUser
+
+	delete(dbStructure.EmailToId, user.Email)
+	dbStructure.EmailToId[email] = id
+
+	err = db.WriteDB(dbStructure)
+	if err != nil {
+		return PublicUser{}, err
+	}
+
 	return PublicUser{
-		Id:    user.Id,
-		Email: user.Email,
+		Id:    UpdatedUser.Id,
+		Email: UpdatedUser.Email,
 	}, nil
 
 }
