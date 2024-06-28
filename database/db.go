@@ -1,13 +1,39 @@
 package database
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+const PassCost = 10
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), PassCost)
+	return string(bytes), err
+}
+
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func LongTermToken(password string) (string, error) {
+
+	passdata, err := rand.Read([]byte(password))
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString([]byte(strconv.Itoa(passdata))), nil
+
+}
 
 type ChirpsMsg struct {
 	Id   int    `json:"id"`
@@ -43,18 +69,6 @@ func (db *DB) ensureDB() error {
 	}
 
 	return nil
-}
-
-const PassCost = 10
-
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), PassCost)
-	return string(bytes), err
-}
-
-func CheckPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
 }
 
 func (db *DB) LoadDB() (DBStructure, error) {
@@ -222,8 +236,6 @@ func NewDB(path string) (*DB, error) {
 		}
 	}
 
-	// Perform any additional initialization logic here
-
 	return db, nil
 }
 
@@ -269,10 +281,7 @@ func (db *DB) GetPublicUser(id int) (PublicUser, error) {
 		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
 	}
 
-	return PublicUser{
-		Id:    user.Id,
-		Email: user.Email,
-	}, nil
+	return PublicUser{Id: user.Id, Email: user.Email}, nil
 }
 
 func (db *DB) GetUserFromLogin(email, password string) (PublicUser, error) {
@@ -295,10 +304,7 @@ func (db *DB) GetUserFromLogin(email, password string) (PublicUser, error) {
 	pass_check := CheckPasswordHash(password, user.Password)
 
 	if pass_check {
-		return PublicUser{
-			Id:    user.Id,
-			Email: user.Email,
-		}, nil
+		return PublicUser{Id: user.Id, Email: user.Email}, nil
 	} else {
 		return PublicUser{}, fmt.Errorf("password doesn't match")
 	}
@@ -323,15 +329,11 @@ func (db *DB) UpdateUser(id int, email, password string) (PublicUser, error) {
 		return PublicUser{}, err
 	}
 
-	UpdatedUser := User{
-		Id:       user.Id,
-		Email:    email,
-		Password: passhash,
-	}
-
-	dbStructure.Users[id] = UpdatedUser
+	UpdatedUser := User{Id: user.Id, Email: email, Password: passhash}
 
 	delete(dbStructure.EmailToId, user.Email)
+
+	dbStructure.Users[id] = UpdatedUser
 	dbStructure.EmailToId[email] = id
 
 	err = db.WriteDB(dbStructure)
@@ -339,9 +341,6 @@ func (db *DB) UpdateUser(id int, email, password string) (PublicUser, error) {
 		return PublicUser{}, err
 	}
 
-	return PublicUser{
-		Id:    UpdatedUser.Id,
-		Email: UpdatedUser.Email,
-	}, nil
+	return PublicUser{Id: user.Id, Email: user.Email}, nil
 
 }

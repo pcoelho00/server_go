@@ -27,6 +27,7 @@ func (cfg *ApiConfig) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Bad Arguments")
+		return
 	}
 
 	User, err := cfg.DB.GetUserFromLogin(postUser.Email, postUser.Password)
@@ -35,18 +36,19 @@ func (cfg *ApiConfig) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusUnauthorized, "User not Found/Wrong Password")
-	} else {
-		token, err := auth.CreateToken(cfg.JwtSecret, postUser.ExpireSecs, User.Id)
-		if err != nil {
-			jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error creating token")
-		}
-
-		jsondecoders.RespondWithJson(w, http.StatusOK, LoginUser{
-			Id:       User.Id,
-			Email:    User.Email,
-			JwtToken: token,
-		})
+		return
 	}
+	token, err := auth.CreateToken(cfg.JwtSecret, postUser.ExpireSecs, User.Id)
+	if err != nil {
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error creating token")
+		return
+	}
+
+	jsondecoders.RespondWithJson(w, http.StatusOK, LoginUser{
+		Id:       User.Id,
+		Email:    User.Email,
+		JwtToken: token,
+	})
 
 }
 
