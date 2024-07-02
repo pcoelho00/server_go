@@ -12,10 +12,11 @@ import (
 	"github.com/pcoelho00/server_go/jsondecoders"
 )
 
-type LoginUser struct {
-	Id       int    `json:"id"`
-	Email    string `json:"email"`
-	JwtToken string `json:"token"`
+type LoggedUser struct {
+	Id           int    `json:"id"`
+	Email        string `json:"email"`
+	JwtToken     string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (cfg *ApiConfig) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -31,23 +32,34 @@ func (cfg *ApiConfig) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	User, err := cfg.DB.GetUserFromLogin(postUser.Email, postUser.Password)
-
-	log.Println(User)
-
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusUnauthorized, "User not Found/Wrong Password")
 		return
 	}
+
+	refresh_token, err := auth.CreateRefreshToken(32)
+	if err != nil {
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error creating token")
+		return
+	}
+
+	err = cfg.DB.SaveRefreshToken(refresh_token, User.Id)
+	if err != nil {
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error saving token")
+		return
+	}
+
 	token, err := auth.CreateToken(cfg.JwtSecret, postUser.ExpireSecs, User.Id)
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error creating token")
 		return
 	}
 
-	jsondecoders.RespondWithJson(w, http.StatusOK, LoginUser{
-		Id:       User.Id,
-		Email:    User.Email,
-		JwtToken: token,
+	jsondecoders.RespondWithJson(w, http.StatusOK, LoggedUser{
+		Id:           User.Id,
+		Email:        User.Email,
+		JwtToken:     token,
+		RefreshToken: refresh_token,
 	})
 
 }
@@ -96,6 +108,8 @@ func (cfg *ApiConfig) PutLoginUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	log.Println(postUser)
+
 	UpdatedUser, err := cfg.DB.UpdateUser(id, postUser.Email, postUser.Password)
 
 	if err != nil {
@@ -107,5 +121,59 @@ func (cfg *ApiConfig) PutLoginUserHandler(w http.ResponseWriter, r *http.Request
 		Id:    UpdatedUser.Id,
 		Email: UpdatedUser.Email,
 	})
+
+}
+
+func (cfg *ApiConfig) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+
+	token_string := r.Header.Get("Authorization")
+	token_string = strings.Replace(token_string, "Bearer ", "", 1)
+
+	log.Println(token_string)
+
+	id, err := cfg.DB.FindRefreshToken(token_string)
+	if err != nil {
+		log.Println(err.Error())
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error accessing the Database")
+		return
+	}
+
+	if id == 0 {
+		jsondecoders.RespondWithError(w, http.StatusUnauthorized, "Unauthorized User")
+		return
+	} else {
+		type TokenResponse struct {
+			Token string `json:"token"`
+		}
+		token, err := auth.CreateToken(cfg.JwtSecret, 60*60, id)
+		if err != nil {
+			log.Println(err.Error())
+			jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error Creating Token")
+			return
+		}
+
+		jsondecoders.RespondWithJson(w, http.StatusOK, TokenResponse{
+			Token: token,
+		})
+		return
+	}
+
+}
+
+func (cfg *ApiConfig) RevokeRefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+
+	token_string := r.Header.Get("Authorization")
+	token_string = strings.Replace(token_string, "Bearer ", "", 1)
+
+	log.Println(token_string)
+
+	err := cfg.DB.RevokeRefreshToken(token_string)
+	if err != nil {
+		log.Println(err.Error())
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error accessing the Database")
+		return
+	}
+
+	jsondecoders.RespondWithNoBody(w, http.StatusNoContent)
 
 }

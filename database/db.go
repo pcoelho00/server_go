@@ -1,39 +1,15 @@
 package database
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
-	"strconv"
 	"sync"
+	"time"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/pcoelho00/server_go/auth"
 )
-
-const PassCost = 10
-
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), PassCost)
-	return string(bytes), err
-}
-
-func CheckPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
-}
-
-func LongTermToken(password string) (string, error) {
-
-	passdata, err := rand.Read([]byte(password))
-	if err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString([]byte(strconv.Itoa(passdata))), nil
-
-}
 
 type ChirpsMsg struct {
 	Id   int    `json:"id"`
@@ -51,15 +27,21 @@ type User struct {
 	Password string `json:"password"`
 }
 
+type RefreshToken struct {
+	UserID         int       `json:"user_id"`
+	Token          string    `json:"refresh_token"`
+	ExpirationTime time.Time `json:"expiration_time"`
+}
+
 type PublicUser struct {
 	Id    int    `json:"id"`
 	Email string `json:"email"`
 }
 
 type DBStructure struct {
-	Chirps    map[int]ChirpsMsg `json:"chirps"`
-	Users     map[int]User      `json:"users"`
-	EmailToId map[string]int    `json:"emails"`
+	Chirps        map[int]ChirpsMsg       `json:"chirps"`
+	Users         map[int]User            `json:"users"`
+	RefreshTokens map[string]RefreshToken `json:"refresh_token"`
 }
 
 func (db *DB) ensureDB() error {
@@ -92,8 +74,8 @@ func (db *DB) LoadDB() (DBStructure, error) {
 		dbStructure.Users = make(map[int]User)
 	}
 
-	if dbStructure.EmailToId == nil {
-		dbStructure.EmailToId = make(map[string]int)
+	if dbStructure.RefreshTokens == nil {
+		dbStructure.RefreshTokens = make(map[string]RefreshToken)
 	}
 
 	return dbStructure, nil
@@ -131,20 +113,15 @@ func (db *DB) WriteChirpsToDB(msg ChirpsMsg) (DBStructure, error) {
 func (db *DB) CreateUser(email, password string) (User, error) {
 	dbStructure, err := db.LoadDB()
 	if err != nil {
-		println("error loading")
+		log.Println("error loading")
 		return User{}, err
-	}
-
-	Id, ok := dbStructure.EmailToId[email]
-	if ok {
-		return dbStructure.Users[Id], nil
 	}
 
 	last_id := len(dbStructure.Users)
 
-	passhash, err := HashPassword(password)
+	passhash, err := auth.HashPassword(password)
 	if err != nil {
-		println("error creating password hash")
+		log.Println("error creating password hash")
 		return User{}, err
 	}
 
@@ -155,11 +132,10 @@ func (db *DB) CreateUser(email, password string) (User, error) {
 	}
 
 	dbStructure.Users[NewUser.Id] = NewUser
-	dbStructure.EmailToId[NewUser.Email] = NewUser.Id
 
 	err = db.WriteDB(dbStructure)
 	if err != nil {
-		println("couldn't save the database")
+		log.Println("couldn't save the database")
 		return User{}, err
 	}
 
@@ -284,29 +260,36 @@ func (db *DB) GetPublicUser(id int) (PublicUser, error) {
 	return PublicUser{Id: user.Id, Email: user.Email}, nil
 }
 
-func (db *DB) GetUserFromLogin(email, password string) (PublicUser, error) {
+func (db *DB) GetUserFromLogin(email, password string) (User, error) {
 
 	dbStructure, err := db.LoadDB()
 	if err != nil {
-		return PublicUser{}, err
+		return User{}, err
 	}
 
-	id, ok := dbStructure.EmailToId[email]
+	search_id := 0
+
+	for id, user := range dbStructure.Users {
+		if email == user.Email {
+			search_id = id
+			break
+		}
+	}
+	if search_id == 0 {
+		return User{}, fmt.Errorf("User %s doesn't exist", email)
+	}
+
+	user, ok := dbStructure.Users[search_id]
 	if !ok {
-		return PublicUser{}, fmt.Errorf("User %s doesn't exist", email)
+		return User{}, fmt.Errorf("User with id %d not found", search_id)
 	}
 
-	user, ok := dbStructure.Users[id]
-	if !ok {
-		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
-	}
-
-	pass_check := CheckPasswordHash(password, user.Password)
+	pass_check := auth.CheckPasswordHash(password, user.Password)
 
 	if pass_check {
-		return PublicUser{Id: user.Id, Email: user.Email}, nil
+		return user, nil
 	} else {
-		return PublicUser{}, fmt.Errorf("password doesn't match")
+		return User{}, fmt.Errorf("password doesn't match")
 	}
 
 }
@@ -323,24 +306,86 @@ func (db *DB) UpdateUser(id int, email, password string) (PublicUser, error) {
 		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
 	}
 
-	passhash, err := HashPassword(password)
+	passhash, err := auth.HashPassword(password)
 	if err != nil {
 		println("error creating password hash")
 		return PublicUser{}, err
 	}
 
-	UpdatedUser := User{Id: user.Id, Email: email, Password: passhash}
-
-	delete(dbStructure.EmailToId, user.Email)
+	UpdatedUser := User{
+		Id:       user.Id,
+		Email:    email,
+		Password: passhash,
+	}
 
 	dbStructure.Users[id] = UpdatedUser
-	dbStructure.EmailToId[email] = id
 
 	err = db.WriteDB(dbStructure)
 	if err != nil {
 		return PublicUser{}, err
 	}
 
-	return PublicUser{Id: user.Id, Email: user.Email}, nil
+	return PublicUser{Id: UpdatedUser.Id, Email: UpdatedUser.Email}, nil
+
+}
+
+func (db *DB) SaveRefreshToken(token string, user_id int) error {
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return err
+	}
+
+	NewRefreshToken := RefreshToken{
+		UserID:         user_id,
+		Token:          token,
+		ExpirationTime: time.Now().AddDate(0, 0, 60),
+	}
+
+	dbStructure.RefreshTokens[token] = NewRefreshToken
+	err = db.WriteDB(dbStructure)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func (db *DB) FindRefreshToken(token string) (int, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return 0, err
+	}
+
+	now := time.Now()
+	refreshToken, ok := dbStructure.RefreshTokens[token]
+	if !ok {
+		return 0, nil
+	}
+
+	if now.After(refreshToken.ExpirationTime) {
+		return 0, nil
+	}
+
+	return refreshToken.UserID, nil
+
+}
+
+func (db *DB) RevokeRefreshToken(token string) error {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return err
+	}
+
+	delete(dbStructure.RefreshTokens, token)
+
+	err = db.WriteDB(dbStructure)
+	if err != nil {
+		return err
+	}
+
+	return nil
 
 }

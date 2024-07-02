@@ -30,7 +30,7 @@ func (pu *PostUser) UnmarshalJSON(data []byte) error {
 	}
 
 	if aux.ExpireSecs == nil {
-		pu.ExpireSecs = 24 * 60 * 60
+		pu.ExpireSecs = 1 * 60 * 60
 	} else {
 		pu.ExpireSecs = *aux.ExpireSecs
 	}
