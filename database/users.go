@@ -25,14 +25,13 @@ func (db *DB) CreateUser(email, password string) (User, error) {
 		return User{}, err
 	}
 
-	last_id := len(dbStructure.Users)
-
 	passhash, err := auth.HashPassword(password)
 	if err != nil {
 		log.Println("error creating password hash")
 		return User{}, err
 	}
 
+	last_id := dbStructure.DBInfo.LastUserID
 	NewUser := User{
 		Id:       last_id + 1,
 		Email:    email,
@@ -40,6 +39,7 @@ func (db *DB) CreateUser(email, password string) (User, error) {
 	}
 
 	dbStructure.Users[NewUser.Id] = NewUser
+	dbStructure.DBInfo.LastUserID = NewUser.Id
 
 	err = db.WriteDB(dbStructure)
 	if err != nil {

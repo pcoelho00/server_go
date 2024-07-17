@@ -22,6 +22,18 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+func GetJWTClaims(token_string string, jwt_string string) (jwt.Claims, error) {
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token_string, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(jwt_string), nil
+	})
+	if err != nil {
+		return jwt.MapClaims{}, err
+	}
+
+	return claims, nil
+}
+
 func CreateToken(secretKey string, expire_seconds int, id int) (string, error) {
 
 	now := time.Now()

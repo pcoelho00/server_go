@@ -11,10 +11,16 @@ type DB struct {
 	mux  *sync.RWMutex
 }
 
+type DBInfo struct {
+	LastChirpID int `json:"last_chirp_id"`
+	LastUserID  int `json:"last_user_id"`
+}
+
 type DBStructure struct {
 	Chirps        map[int]ChirpsMsg       `json:"chirps"`
 	Users         map[int]User            `json:"users"`
 	RefreshTokens map[string]RefreshToken `json:"refresh_token"`
+	DBInfo        *DBInfo                 `json:"db_info"`
 }
 
 func (db *DB) ensureDB() error {
@@ -69,6 +75,13 @@ func (db *DB) LoadDB() (DBStructure, error) {
 
 	if dbStructure.RefreshTokens == nil {
 		dbStructure.RefreshTokens = make(map[string]RefreshToken)
+	}
+
+	if dbStructure.DBInfo == nil {
+		dbStructure.DBInfo = &DBInfo{
+			LastChirpID: 0,
+			LastUserID:  0,
+		}
 	}
 
 	return dbStructure, nil

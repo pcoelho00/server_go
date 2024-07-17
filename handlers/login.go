@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/pcoelho00/server_go/auth"
 	"github.com/pcoelho00/server_go/jsondecoders"
 )
@@ -71,11 +70,7 @@ func (cfg *ApiConfig) PutLoginUserHandler(w http.ResponseWriter, r *http.Request
 
 	log.Println(token_string)
 
-	claims := jwt.MapClaims{}
-	_, err := jwt.ParseWithClaims(token_string, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(cfg.JwtSecret), nil
-	})
-
+	claims, err := auth.GetJWTClaims(token_string, cfg.JwtSecret)
 	if err != nil {
 		log.Println(err.Error())
 		jsondecoders.RespondWithError(w, http.StatusUnauthorized, "Couldn't authenticate user")
