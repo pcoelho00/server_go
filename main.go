@@ -11,25 +11,19 @@ import (
 	"github.com/pcoelho00/server_go/handlers"
 )
 
-func LoadJWT() (string, error) {
-	err := godotenv.Load()
-	if err != nil {
-		return "", err
-	}
-	jwtSecret := os.Getenv("JWT_SECRET")
-	return jwtSecret, nil
-}
-
 func main() {
 
 	const port = "8080"
 	const root = "."
 	const templates = root + "/templates"
 
-	jwtSecret, err := LoadJWT()
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal(err.Error())
 	}
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	PolkaKey := os.Getenv("POLKA_KEY")
 
 	_, err = os.Stat("database.json")
 	if !os.IsNotExist(err) {
@@ -48,6 +42,7 @@ func main() {
 		FileserverHits: 0,
 		DB:             db,
 		JwtSecret:      jwtSecret,
+		PolkaKey:       PolkaKey,
 	}
 
 	mux := http.NewServeMux()
@@ -69,6 +64,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.PostLoginHandler)
 	mux.HandleFunc("POST /api/refresh", apiCfg.RefreshTokenHandler)
 	mux.HandleFunc("POST /api/revoke", apiCfg.RevokeRefreshTokenHandler)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.ChirpyRedHandler)
 
 	server := &http.Server{
 		Addr:    ":" + port,

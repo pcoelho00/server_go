@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/pcoelho00/server_go/database"
 	"github.com/pcoelho00/server_go/jsondecoders"
 )
 
@@ -38,11 +39,6 @@ func (pu *PostUser) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type ResponseUser struct {
-	Id    int    `json:"id"`
-	Email string `json:"email"`
-}
-
 func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	user := PostUser{}
@@ -59,9 +55,10 @@ func (cfg *ApiConfig) PostUserHandler(w http.ResponseWriter, r *http.Request) {
 		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't Create the User")
 	}
 
-	jsondecoders.RespondWithJson(w, http.StatusCreated, ResponseUser{
-		Id:    NewUser.Id,
-		Email: NewUser.Email,
+	jsondecoders.RespondWithJson(w, http.StatusCreated, database.PublicUser{
+		Id:          NewUser.Id,
+		Email:       NewUser.Email,
+		IsChirpyRed: NewUser.IsChirpyRed,
 	})
 
 }

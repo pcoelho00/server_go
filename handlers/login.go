@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pcoelho00/server_go/auth"
+	"github.com/pcoelho00/server_go/database"
 	"github.com/pcoelho00/server_go/jsondecoders"
 )
 
@@ -16,6 +17,7 @@ type LoggedUser struct {
 	Email        string `json:"email"`
 	JwtToken     string `json:"token"`
 	RefreshToken string `json:"refresh_token"`
+	IsChirpyRed  bool   `json:"is_chirpy_red"`
 }
 
 func (cfg *ApiConfig) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +61,7 @@ func (cfg *ApiConfig) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 		Email:        User.Email,
 		JwtToken:     token,
 		RefreshToken: refresh_token,
+		IsChirpyRed:  User.IsChirpyRed,
 	})
 
 }
@@ -112,9 +115,10 @@ func (cfg *ApiConfig) PutLoginUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	jsondecoders.RespondWithJson(w, http.StatusOK, ResponseUser{
-		Id:    UpdatedUser.Id,
-		Email: UpdatedUser.Email,
+	jsondecoders.RespondWithJson(w, http.StatusOK, database.PublicUser{
+		Id:          UpdatedUser.Id,
+		Email:       UpdatedUser.Email,
+		IsChirpyRed: UpdatedUser.IsChirpyRed,
 	})
 
 }

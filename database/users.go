@@ -8,14 +8,16 @@ import (
 )
 
 type User struct {
-	Id       int    `json:"id"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Id          int    `json:"id"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	IsChirpyRed bool   `json:"is_chirpy_red"`
 }
 
 type PublicUser struct {
-	Id    int    `json:"id"`
-	Email string `json:"email"`
+	Id          int    `json:"id"`
+	Email       string `json:"email"`
+	IsChirpyRed bool   `json:"is_chirpy_red"`
 }
 
 func (db *DB) CreateUser(email, password string) (User, error) {
@@ -33,9 +35,10 @@ func (db *DB) CreateUser(email, password string) (User, error) {
 
 	last_id := dbStructure.DBInfo.LastUserID
 	NewUser := User{
-		Id:       last_id + 1,
-		Email:    email,
-		Password: passhash,
+		Id:          last_id + 1,
+		Email:       email,
+		Password:    passhash,
+		IsChirpyRed: false,
 	}
 
 	dbStructure.Users[NewUser.Id] = NewUser
@@ -60,8 +63,9 @@ func (db *DB) GetUsers() ([]PublicUser, error) {
 	users := make([]PublicUser, 0)
 	for _, user := range dbStructure.Users {
 		p_user := PublicUser{
-			Id:    user.Id,
-			Email: user.Email,
+			Id:          user.Id,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed,
 		}
 		users = append(users, p_user)
 	}
@@ -97,7 +101,7 @@ func (db *DB) GetPublicUser(id int) (PublicUser, error) {
 		return PublicUser{}, fmt.Errorf("User with id %d not found", id)
 	}
 
-	return PublicUser{Id: user.Id, Email: user.Email}, nil
+	return PublicUser{Id: user.Id, Email: user.Email, IsChirpyRed: user.IsChirpyRed}, nil
 }
 
 func (db *DB) GetUserFromLogin(email, password string) (User, error) {
@@ -153,9 +157,10 @@ func (db *DB) UpdateUser(id int, email, password string) (PublicUser, error) {
 	}
 
 	UpdatedUser := User{
-		Id:       user.Id,
-		Email:    email,
-		Password: passhash,
+		Id:          user.Id,
+		Email:       email,
+		Password:    passhash,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	dbStructure.Users[id] = UpdatedUser
@@ -165,6 +170,30 @@ func (db *DB) UpdateUser(id int, email, password string) (PublicUser, error) {
 		return PublicUser{}, err
 	}
 
-	return PublicUser{Id: UpdatedUser.Id, Email: UpdatedUser.Email}, nil
+	return PublicUser{Id: UpdatedUser.Id, Email: UpdatedUser.Email, IsChirpyRed: UpdatedUser.IsChirpyRed}, nil
+
+}
+
+func (db *DB) UpdateToChirpyRed(id int) (bool, error) {
+
+	dbStructure, err := db.LoadDB()
+	if err != nil {
+		return false, err
+	}
+
+	user, ok := dbStructure.Users[id]
+	if !ok {
+		return false, nil
+	}
+
+	user.IsChirpyRed = true
+	dbStructure.Users[id] = user
+
+	err = db.WriteDB(dbStructure)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 
 }

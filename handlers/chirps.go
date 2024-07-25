@@ -18,6 +18,7 @@ type ApiConfig struct {
 	FileserverHits int
 	DB             *database.DB
 	JwtSecret      string
+	PolkaKey       string
 }
 
 type ValidMsg struct {
