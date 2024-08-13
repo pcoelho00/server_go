@@ -98,9 +98,27 @@ func (cfg *ApiConfig) PostChirpsHandler(w http.ResponseWriter, r *http.Request) 
 
 func (cfg *ApiConfig) GetChirpsMsgHandler(w http.ResponseWriter, r *http.Request) {
 
-	ChirpsMsgs, err := cfg.DB.GetChirps()
+	s_id := r.URL.Query().Get("author_id")
+	var id int
+	var err error
+	if len(s_id) == 0 {
+		id = 0
+	} else {
+		id, err = strconv.Atoi(s_id)
+		if err != nil {
+			jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Couldn't get the id")
+		}
+	}
+
+	ChirpsMsgs, err := cfg.DB.GetChirps(id)
 	if err != nil {
 		jsondecoders.RespondWithError(w, http.StatusBadRequest, "Couldn't return msg from the database")
+	}
+
+	sort_type := r.URL.Query().Get("sort")
+	ChirpsMsgs, err = cfg.DB.SortMsgs(ChirpsMsgs, sort_type)
+	if err != nil {
+		jsondecoders.RespondWithError(w, http.StatusInternalServerError, "Error sorting msgs")
 	}
 
 	jsondecoders.RespondWithJson(w, http.StatusOK, ChirpsMsgs)
